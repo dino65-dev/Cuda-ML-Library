@@ -84,6 +84,14 @@ make clean
 make              # Build optimized library
 make test         # Verify build
 ```
+### Automated Build and Test
+
+For a complete automated build and test process, use the provided script:
+
+```bash
+cd /path/to/Cuda-ML-Library/HBM_SVM
+chmod +x build_and_test.sh
+./build_and_test.sh
 
 ### Basic Usage
 
