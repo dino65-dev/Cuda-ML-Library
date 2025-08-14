@@ -23,6 +23,16 @@
         } \
     } while(0)
 
+#define CURAND_CHECK(call) \
+    do { \
+        curandStatus_t status = call; \
+        if (status != CURAND_STATUS_SUCCESS) { \
+            std::cerr << "CURAND error at " << __FILE__ << ":" << __LINE__ \
+                      << " - status code: " << status << std::endl; \
+            exit(1); \
+        } \
+    } while(0)
+
 // RBF Kernel Implementation
 __global__ void rbf_kernel_matrix(const float* X, float* K, int n_samples, 
                                  int n_features, float gamma) {
@@ -178,7 +188,7 @@ __global__ void predict_kernel(const float* sv_X, const float* sv_alpha,
 // CudaSVM Implementation
 CudaSVM::CudaSVM(const SVMParams& params) : params_(params) {
     CUBLAS_CHECK(cublasCreate(&cublas_handle_));
-    CUDA_CHECK(curandCreateGenerator(&curand_gen_, CURAND_RNG_PSEUDO_DEFAULT));
+    CURAND_CHECK(curandCreateGenerator(&curand_gen_, CURAND_RNG_PSEUDO_DEFAULT));
     
     d_X_ = nullptr;
     d_y_ = nullptr;
