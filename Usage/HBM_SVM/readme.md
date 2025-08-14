@@ -96,9 +96,6 @@ svm = OptimizedCudaSVC(
     C=1.0, 
     kernel='rbf', 
     gamma='scale',
-    memory_pool_size=2048,  # MB for memory pool
-    cache_size=1024,        # MB for kernel cache
-    use_half_precision=False,  # Enable for even faster training
     verbose=True
 )
 
@@ -129,10 +126,6 @@ svm = OptimizedCudaSVC(
     C=10.0,
     kernel='rbf', 
     gamma=0.1,
-    memory_pool_size=4096,      # 4GB memory pool
-    cache_size=2048,            # 2GB kernel cache
-    async_training=True,        # Enable async operations
-    streaming_cache=True,       # Enable intelligent caching
     verbose=True
 )
 
@@ -140,8 +133,8 @@ svm.fit(X_scaled, y)
 
 # Get performance metrics
 metrics = svm.get_performance_metrics()
-print(f"Memory bandwidth utilization: {metrics['bandwidth_utilization']:.1f}%")
-print(f"Cache hit rate: {metrics['cache_hit_rate']:.1f}%")
+print(f"Training time: {metrics['training_time']:.2f}s")
+print(f"Memory usage: {metrics['memory_usage_gb']:.2f}GB")
 ```
 
 ### Regression Example
@@ -159,9 +152,7 @@ svr = OptimizedCudaSVR(
     epsilon=0.01,
     kernel='rbf',
     gamma='scale',
-    memory_pool_size=3072,   # 3GB pool
-    batch_size=2048,         # Optimized batch size for HBM
-    precision='mixed'        # Use FP16 for speed, FP32 for accuracy
+    verbose=True
 )
 
 svr.fit(X, y)
@@ -173,13 +164,12 @@ predictions = svr.predict(X_test)
 ```python
 # Process very large datasets efficiently
 def batch_inference(model, X_large, batch_size=10000):
-    """Efficient batch processing using HBM optimization"""
+    """Efficient batch processing using optimized prediction"""
     predictions = []
     
     for i in range(0, len(X_large), batch_size):
         batch = X_large[i:i+batch_size]
-        # Async prediction with memory optimization
-        pred_batch = model.predict(batch, batch_async=True)
+        pred_batch = model.predict(batch)
         predictions.append(pred_batch)
     
     return np.concatenate(predictions)
@@ -190,38 +180,35 @@ large_predictions = batch_inference(svm, X_very_large)
 
 ## 🔧 Advanced Configuration
 
-### Memory Pool Configuration
+### Basic Configuration
 
 ```python
 svm = OptimizedCudaSVC(
-    # Memory pool settings
-    memory_pool_size=4096,        # MB - adjust based on GPU memory
-    pool_growth_factor=1.5,       # How much to grow pool when needed
-    pool_alignment=256,           # Memory alignment for HBM efficiency
-    
-    # Cache settings  
-    cache_size=2048,              # MB for kernel matrix cache
-    cache_replacement='lru',      # Cache replacement policy
-    prefetch_rows=64,             # Number of rows to prefetch
-    
-    # Performance settings
-    async_training=True,          # Enable async operations
-    streaming_cache=True,         # Enable streaming cache
-    coalesced_access=True,        # Optimize memory access patterns
+    C=1.0,              # Regularization parameter
+    kernel='rbf',       # Kernel type: 'linear', 'rbf', 'poly', 'sigmoid'
+    gamma='scale',      # Kernel coefficient
+    tolerance=1e-3,     # Stopping tolerance
+    max_iter=1000,      # Maximum iterations
+    shrinking=True,     # Use shrinking heuristic
+    probability=False,  # Enable probability estimates
+    verbose=False       # Enable verbose output
 )
 ```
 
-### Precision Settings
+### Available Kernels
 
 ```python
-# Mixed precision for speed
-svm_fast = OptimizedCudaSVC(precision='mixed')  # FP16 + FP32
+# Linear kernel
+svm_linear = OptimizedCudaSVC(kernel='linear')
 
-# Full precision for accuracy  
-svm_accurate = OptimizedCudaSVC(precision='float32')
+# RBF (Radial Basis Function) kernel - default
+svm_rbf = OptimizedCudaSVC(kernel='rbf', gamma='scale')
 
-# Half precision for maximum speed (experimental)
-svm_fastest = OptimizedCudaSVC(precision='float16')
+# Polynomial kernel
+svm_poly = OptimizedCudaSVC(kernel='poly', degree=3, gamma='scale', coef0=0.0)
+
+# Sigmoid kernel
+svm_sigmoid = OptimizedCudaSVC(kernel='sigmoid', gamma='scale', coef0=0.0)
 ```
 
 ## 📈 Performance Benchmarks
@@ -234,20 +221,15 @@ svm_fastest = OptimizedCudaSVC(precision='float16')
 | 50K     | 200      | 156.2s       | 28.4s   | 5.5x    |
 | 100K    | 500      | 487.1s       | 67.2s   | 7.2x    |
 
-### Memory Bandwidth Utilization
-
-- **Standard SVM**: ~30-40% bandwidth utilization
-- **HBM Optimized**: ~75-85% bandwidth utilization
-- **Peak Performance**: Up to 90% on A100 with large datasets
-
 ### GPU Memory Usage
 
 ```python
 # Monitor memory usage during training
 metrics = svm.get_performance_metrics()
-print(f"Peak memory usage: {metrics['peak_memory_gb']:.2f}GB")
-print(f"Memory pool efficiency: {metrics['pool_efficiency']:.1f}%")
-print(f"Cache hit rate: {metrics['cache_hit_rate']:.1f}%")
+print(f"Training time: {metrics['training_time']:.2f}s")
+print(f"Memory usage: {metrics['memory_usage_gb']:.2f}GB")
+print(f"Model fitted: {metrics['is_fitted']}")
+print(f"Parameters: {metrics['parameters']}")
 ```
 
 ## 🎛️ Hyperparameter Tuning for HBM
@@ -259,17 +241,17 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.base import BaseEstimator, ClassifierMixin
 
 class HBMSVMWrapper(BaseEstimator, ClassifierMixin):
-    def __init__(self, C=1.0, gamma='scale', cache_size=1024):
+    def __init__(self, C=1.0, gamma='scale', kernel='rbf'):
         self.C = C
         self.gamma = gamma  
-        self.cache_size = cache_size
+        self.kernel = kernel
     
     def fit(self, X, y):
         self.svm_ = OptimizedCudaSVC(
-            C=self.C, gamma=self.gamma,
-            cache_size=self.cache_size,
-            memory_pool_size=4096,
-            async_training=True
+            C=self.C, 
+            gamma=self.gamma,
+            kernel=self.kernel,
+            verbose=False
         )
         self.svm_.fit(X, y)
         return self
@@ -281,7 +263,7 @@ class HBMSVMWrapper(BaseEstimator, ClassifierMixin):
 param_grid = {
     'C': [0.1, 1, 10, 100],
     'gamma': ['scale', 'auto', 0.01, 0.1, 1],
-    'cache_size': [1024, 2048, 4096]  # Tune cache size
+    'kernel': ['rbf', 'linear', 'poly']
 }
 
 grid_search = GridSearchCV(
@@ -296,74 +278,73 @@ grid_search.fit(X_train, y_train)
 ### Performance Profiling
 
 ```python
-# Enable detailed profiling
+# Enable detailed logging
 svm = OptimizedCudaSVC(
-    profile=True,           # Enable performance profiling
-    verbose=True,           # Detailed logging
-    debug_memory=True       # Memory usage tracking
+    verbose=True           # Enable detailed logging
 )
 
 svm.fit(X_train, y_train)
 
-# Get detailed performance report
-report = svm.get_performance_report()
-print(report)
+# Get detailed performance metrics
+metrics = svm.get_performance_metrics()
+print(f"Training completed in {metrics['training_time']:.2f}s")
+print(f"Peak memory usage: {metrics['memory_usage_gb']:.2f}GB")
+print(f"Model parameters: {metrics['parameters']}")
 ```
 
-### Memory Management
+### Error Handling
 
 ```python
-# Manual memory management
-svm.reset_memory_pool()     # Clear memory pool
-svm.clear_cache()          # Clear kernel cache
-svm.optimize_memory()      # Defragment memory
+from HBM_SVM.cuda_svm_optimized import CudaSVMError
+
+try:
+    svm = OptimizedCudaSVC(verbose=True)
+    svm.fit(X_train, y_train)
+    predictions = svm.predict(X_test)
+except CudaSVMError as e:
+    print(f"CUDA SVM Error: {e}")
+    # Handle GPU-related errors
+except Exception as e:
+    print(f"General error: {e}")
 ```
 
 ## 🚨 Troubleshooting
 
 ### Common Issues
 
-**"Out of memory" errors:**
+**"CUDA SVM library not found":**
+```bash
+cd HBM_SVM/
+make clean && make
+```
+
+**"CUDA is not available on this system":**
+- Check CUDA installation: `nvcc --version`
+- Check GPU availability: `nvidia-smi`
+- Ensure CUDA drivers are installed
+
+**Out of memory errors:**
 ```python
-# Reduce memory usage
-svm = OptimizedCudaSVC(
-    memory_pool_size=1024,  # Reduce pool size
-    cache_size=512,         # Reduce cache
-    batch_size=1024         # Smaller batches
-)
+# Process data in smaller batches
+def predict_in_batches(model, X, batch_size=1000):
+    predictions = []
+    for i in range(0, len(X), batch_size):
+        batch = X[i:i+batch_size]
+        pred_batch = model.predict(batch)
+        predictions.append(pred_batch)
+    return np.concatenate(predictions)
+
+predictions = predict_in_batches(svm, X_test)
 ```
 
 **Poor performance on small datasets:**
 ```python
-# For small datasets, use standard implementation
+# For small datasets, consider standard implementation
 if X.shape[0] < 5000:
     from SVM.cuda_svm import CudaSVC
     svm = CudaSVC()  # Standard version
 else:
     svm = OptimizedCudaSVC()  # HBM version
-```
-
-**Cache thrashing:**
-```python
-# Optimize cache settings
-svm = OptimizedCudaSVC(
-    cache_size=max(X.shape[0] * 0.1, 512),  # Dynamic cache sizing
-    prefetch_rows=min(X.shape[0] * 0.05, 128)
-)
-```
-
-### GPU Compatibility
-
-```python
-# Check GPU compatibility
-from HBM_SVM.cuda_svm_optimized import check_hbm_support
-
-if check_hbm_support():
-    print("✓ HBM optimizations available")
-    svm = OptimizedCudaSVC(use_hbm_optimizations=True)
-else:
-    print("⚠ Using GDDR optimizations")
-    svm = OptimizedCudaSVC(use_hbm_optimizations=False)
 ```
 
 ## 📚 Examples and Tutorials
@@ -375,9 +356,8 @@ See [`hbm_svm_usage.py`](hbm_svm_usage.py) for comprehensive examples including:
 - ✅ **Classification and regression** with large datasets
 - ✅ **Performance comparison** with standard implementation  
 - ✅ **Batch processing** for high-throughput inference
-- ✅ **Memory optimization** techniques
-- ✅ **Hyperparameter tuning** strategies
 - ✅ **Error handling** and best practices
+- ✅ **Performance monitoring** techniques
 
 ### Running the Examples
 
@@ -410,9 +390,9 @@ python hbm_svm_usage.py
 
 For optimal HBM performance:
 1. Profile your specific GPU architecture
-2. Tune memory pool and cache sizes for your datasets
-3. Monitor bandwidth utilization metrics
-4. Consider mixed-precision training for speed
+2. Monitor memory usage and training time
+3. Tune hyperparameters based on dataset size
+4. Consider batch processing for large inference workloads
 
 ---
 
