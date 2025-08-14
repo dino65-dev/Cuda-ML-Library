@@ -1,0 +1,52 @@
+# Include documentation and metadata files
+include README.md
+include LICENSE
+include VERSION
+include pyproject.toml
+
+# Include Makefiles for building CUDA libraries
+include SVM/Makefile
+include HBM_SVM/Makefile
+
+# Include CUDA source files (for users who want to compile)
+include SVM/*.cu
+include SVM/*.cuh
+include SVM/*.cpp
+include HBM_SVM/*.cu  
+include HBM_SVM/*.cuh
+include HBM_SVM/*.cpp
+
+# Include build and test scripts
+include HBM_SVM/build_and_test.sh
+
+# Include usage examples and documentation
+recursive-include Usage *.py
+recursive-include Usage *.md
+
+# Include any additional documentation
+recursive-include docs *.md
+recursive-include docs *.rst
+
+# Exclude compiled files and build artifacts
+exclude SVM/*.o
+exclude SVM/*.so
+exclude HBM_SVM/*.o
+exclude HBM_SVM/*.so
+global-exclude __pycache__
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude .DS_Store
+global-exclude *.orig
+
+# Exclude development and CI files
+exclude .gitignore
+exclude .github/workflows/*.yml
+exclude tests/
+recursive-exclude tests *
+
+# Exclude IDE and editor files
+global-exclude .vscode
+global-exclude .idea
+global-exclude *.swp
+global-exclude *.swo
+global-exclude *~

@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel", "numpy>=1.19.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cuda-ml-library"
+dynamic = ["version"]
+description = "High-performance CUDA-accelerated Machine Learning library"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+authors = [
+    {name = "dino65-dev", email = "your-email@example.com"},
+]
+keywords = ["cuda", "gpu", "machine learning", "svm", "high performance computing"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    "numpy>=1.19.0",
+    "scikit-learn>=1.0.0",
+]
+
+[project.optional-dependencies]
+cuda = ["cupy-cuda12x>=12.0.0"]
+dev = ["pytest>=6.0", "pytest-cov", "black", "flake8"]
+examples = ["matplotlib>=3.0.0", "jupyter>=1.0.0"]
+
+[project.urls]
+Homepage = "https://github.com/dino65-dev/Cuda-ML-Library"
+Repository = "https://github.com/dino65-dev/Cuda-ML-Library.git"
+Issues = "https://github.com/dino65-dev/Cuda-ML-Library/issues"
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}

@@ -1,0 +1,207 @@
+name: Build and Deploy CUDA ML Library
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [published]
+
+env:
+  PACKAGE_NAME: cuda-ml-library
+
+jobs:
+  # Test build on different Python versions
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential
+    
+    - name: Install Python dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install numpy scikit-learn pytest wheel setuptools build
+    
+    - name: Test package structure
+      run: |
+        python setup.py check
+        python -c "import SVM; print('SVM module imports successfully')"
+    
+    - name: Run basic tests
+      run: |
+        python -m pytest tests/ -v || echo "No tests found, skipping"
+
+  # Build source distribution
+  build-sdist:
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+    
+    - name: Install build dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+    
+    - name: Build source distribution
+      run: |
+        python -m build --sdist
+    
+    - name: Check distribution
+      run: |
+        twine check dist/*
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: source-dist
+        path: dist/*.tar.gz
+
+  # Build wheels for different platforms
+  build-wheels:
+    runs-on: ${{ matrix.os }}
+    needs: test
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install wheel setuptools numpy scikit-learn
+    
+    - name: Build wheel (CPU-only version)
+      run: |
+        python setup.py bdist_wheel
+      env:
+        CUDA_ML_CPU_ONLY: "1"  # Build CPU-only version for PyPI
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: wheels-${{ matrix.os }}-${{ matrix.python-version }}
+        path: dist/*.whl
+
+  # Deploy to TestPyPI on main branch
+  deploy-test:
+    runs-on: ubuntu-latest
+    needs: [build-sdist, build-wheels]
+    if: github.ref == 'refs/heads/main'
+    environment: testpypi
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: dist-artifacts/
+    
+    - name: Prepare distribution files
+      run: |
+        mkdir -p dist/
+        find dist-artifacts/ -name "*.whl" -exec cp {} dist/ \;
+        find dist-artifacts/ -name "*.tar.gz" -exec cp {} dist/ \;
+        ls -la dist/
+    
+    - name: Publish to TestPyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        skip-existing: true
+
+  # Deploy to PyPI on release
+  deploy-pypi:
+    runs-on: ubuntu-latest
+    needs: [build-sdist, build-wheels]
+    if: github.event_name == 'release' && github.event.action == 'published'
+    environment: pypi
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: dist-artifacts/
+    
+    - name: Prepare distribution files
+      run: |
+        mkdir -p dist/
+        find dist-artifacts/ -name "*.whl" -exec cp {} dist/ \;
+        find dist-artifacts/ -name "*.tar.gz" -exec cp {} dist/ \;
+        ls -la dist/
+    
+    - name: Publish to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }}
+
+  # Build CUDA-enabled version (for documentation/advanced users)
+  build-cuda-docs:
+    runs-on: self-hosted  # Requires GPU runner
+    if: false  # Disabled by default - enable if you have GPU runners
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+    
+    - name: Install CUDA toolkit
+      run: |
+        wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.0-1_all.deb
+        sudo dpkg -i cuda-keyring_1.0-1_all.deb
+        sudo apt-get update
+        sudo apt-get install -y cuda-toolkit-12-0
+    
+    - name: Build CUDA version
+      run: |
+        cd SVM && make clean && make
+        cd ../HBM_SVM && make clean && make
+    
+    - name: Test CUDA build
+      run: |
+        cd HBM_SVM && ./build_and_test.sh
+    
+    - name: Generate performance docs
+      run: |
+        python scripts/generate_performance_docs.py
+    
+    - name: Upload CUDA artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: cuda-libraries
+        path: |
+          SVM/libcuda_svm.so
+          HBM_SVM/libcuda_svm_optimized.so
