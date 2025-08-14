@@ -48,17 +48,6 @@ jobs:
       run: |
         python setup.py check
         python -c "import os; print('✓ Package structure OK')"
-    
-    - name: Test imports (CPU-only)
-      run: |
-        export CUDA_ML_CPU_ONLY=1
-        python -c "
-        try:
-            import SVM
-            print('✓ SVM module structure OK')
-        except Exception as e:
-            print(f'⚠ Import warning (expected without CUDA): {e}')
-        "
 
   # Build source distribution
   build-sdist:
@@ -126,11 +115,9 @@ jobs:
         touch SVM/__init__.py  
         touch HBM_SVM/__init__.py
     
-    - name: Build wheel (CPU-only version)
+    - name: Build wheel
       run: |
         python -m build --wheel
-      env:
-        CUDA_ML_CPU_ONLY: "1"
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
@@ -138,7 +125,7 @@ jobs:
         name: wheels-${{ matrix.os }}-py${{ matrix.python-version }}
         path: dist/*.whl
 
-  # Deploy to TestPyPI on main branch (only if you have the secret)
+  # Deploy to TestPyPI on main branch
   deploy-test:
     runs-on: ubuntu-latest
     needs: [build-sdist, build-wheels]
@@ -158,14 +145,14 @@ jobs:
         ls -la dist/
     
     - name: Publish to TestPyPI
-      if: ${{ secrets.TEST_PYPI_API_TOKEN }}
+      if: ${{ secrets.TEST_PYPI_API_TOKEN != '' }}
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         repository-url: https://test.pypi.org/legacy/
         password: ${{ secrets.TEST_PYPI_API_TOKEN }}
         skip-existing: true
 
-  # Deploy to PyPI on release (only if you have the secret)
+  # Deploy to PyPI on release
   deploy-pypi:
     runs-on: ubuntu-latest
     needs: [build-sdist, build-wheels]
@@ -185,7 +172,7 @@ jobs:
         ls -la dist/
     
     - name: Publish to PyPI
-      if: ${{ secrets.PYPI_API_TOKEN }}
+      if: ${{ secrets.PYPI_API_TOKEN != '' }}
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         password: ${{ secrets.PYPI_API_TOKEN }}
