@@ -17,12 +17,13 @@ print_warning() { echo -e "${YELLOW}⚠${NC} $1"; }
 # Check CUDA installation
 echo "Checking CUDA installation..."
 if ! command -v nvcc &> /dev/null; then
-    print_error "NVCC not found. Please install CUDA toolkit."
-    echo "Run: make install-cuda"
-    exit 1
+    print_warning "NVCC not found. Building with CPU fallback."
+    print_warning "For best performance, install CUDA toolkit: make install-cuda"
+    BUILD_MODE="cpu-only"
+else
+    print_success "NVCC found: $(nvcc --version | grep release | cut -d',' -f2)"
+    BUILD_MODE="all"
 fi
-
-print_success "NVCC found: $(nvcc --version | grep release | cut -d',' -f2)"
 
 # Check GPU
 echo ""
@@ -45,20 +46,24 @@ echo ""
 echo "Building CUDA SVM library..."
 make clean 2>/dev/null || true
 
-if ! make; then
+if ! make $BUILD_MODE; then
     print_error "Build failed!"
     echo ""
     echo "Troubleshooting tips:"
-    echo "1. Make sure CUDA toolkit is properly installed"
-    echo "2. Check that your GPU architecture is supported"
+    echo "1. Make sure required development tools are installed"
+    echo "2. Check that Python development headers are available"
     echo "3. Verify all source files are present"
     exit 1
 fi
 
-print_success "Build successful - libcuda_svm.so created"
+if [ "$BUILD_MODE" = "cpu-only" ]; then
+    print_success "Build successful with CPU fallback - libcuda_svm_optimized.so created"
+else
+    print_success "Build successful with CUDA support - libcuda_svm_optimized.so created"
+fi
 
 # Check if library file was created
-if [ ! -f "libcuda_svm.so" ]; then
+if [ ! -f "libcuda_svm_optimized.so" ]; then
     print_error "Library file not found after build!"
     exit 1
 fi

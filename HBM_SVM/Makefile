@@ -1,54 +1,78 @@
-# Makefile for Optimized CUDA SVM with HBM support
+# Makefile for Optimized CUDA SVM with HBM support (with CPU fallback)
 NVCC = nvcc
 CXX = g++
 PYTHON_INCLUDE = $(shell python3 -c "import sysconfig; print(sysconfig.get_path('include'))")
 NUMPY_INCLUDE = $(shell python3 -c "import numpy; print(numpy.get_include())")
 
+# Check if CUDA is available
+CUDA_AVAILABLE := $(shell which nvcc >/dev/null 2>&1 && echo "yes" || echo "no")
+
 # Detect CUDA architecture automatically or provide fallback
-CUDA_ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader,nounits 2>/dev/null | head -n1 | sed 's/\.//g')
-ifeq ($(CUDA_ARCH),)
-	CUDA_ARCH = 75  # Default fallback for modern GPUs
+ifeq ($(CUDA_AVAILABLE),yes)
+	CUDA_ARCH := $(shell nvidia-smi --query-gpu=compute_cap --format=csv,noheader,nounits 2>/dev/null | head -n1 | sed 's/\.//g')
+	ifeq ($(CUDA_ARCH),)
+		CUDA_ARCH = 75  # Default fallback for modern GPUs
+	endif
+	GPU_ARCH = -arch=sm_$(CUDA_ARCH)
+	USE_CUDA = 1
+else
+	USE_CUDA = 0
 endif
-GPU_ARCH = -arch=sm_$(CUDA_ARCH)
 
 # Compiler flags for optimized build
-NVCC_FLAGS = -O3 $(GPU_ARCH) -std=c++14 -Xcompiler -fPIC --expt-relaxed-constexpr --extended-lambda
-CXX_FLAGS = -O3 -fPIC -std=c++14 -Wall
-
-# Include paths
-INCLUDES = -I$(PYTHON_INCLUDE) -I$(NUMPY_INCLUDE) -I/usr/local/cuda/include -I.
-
-# Library paths and libraries
-CUDA_LIB_PATH = /usr/local/cuda/lib64
-LIBS = -L$(CUDA_LIB_PATH) -lcudart -lcublas -lcurand
+ifeq ($(USE_CUDA),1)
+	NVCC_FLAGS = -O3 $(GPU_ARCH) -std=c++14 -Xcompiler -fPIC --expt-relaxed-constexpr --extended-lambda -DUSE_CUDA=1
+	CXX_FLAGS = -O3 -fPIC -std=c++14 -Wall -DUSE_CUDA=1
+	# Include paths
+	INCLUDES = -I$(PYTHON_INCLUDE) -I$(NUMPY_INCLUDE) -I/usr/local/cuda/include -I.
+	# Library paths and libraries
+	CUDA_LIB_PATH = /usr/local/cuda/lib64
+	LIBS = -L$(CUDA_LIB_PATH) -lcudart -lcublas -lcurand
+else
+	CXX_FLAGS = -O3 -fPIC -std=c++14 -Wall -DUSE_CUDA=0
+	# Include paths (no CUDA)
+	INCLUDES = -I$(PYTHON_INCLUDE) -I$(NUMPY_INCLUDE) -I.
+	LIBS = -lm
+endif
 
 # Target
 TARGET = libcuda_svm_optimized.so
 
 # Source files
-CUDA_SOURCES = svm_cuda_optimized.cu memory_pool.cu streaming_cache.cu optimized_kernels.cu
-CPP_SOURCES = svm_bridge_optimized.cpp
-HEADERS = svm_cuda_optimized.cuh
+ifeq ($(USE_CUDA),1)
+	CUDA_SOURCES = svm_cuda_optimized.cu memory_pool.cu streaming_cache.cu optimized_kernels.cu
+	CPP_SOURCES = svm_bridge_optimized.cpp
+	CUDA_OBJECTS = $(CUDA_SOURCES:.cu=.o)
+else
+	CPP_SOURCES = svm_bridge_optimized.cpp svm_cpu_fallback.cpp
+	CUDA_OBJECTS = 
+endif
 
-# Object files
-CUDA_OBJECTS = $(CUDA_SOURCES:.cu=.o)
+HEADERS = svm_cuda_optimized.cuh
 CPP_OBJECTS = $(CPP_SOURCES:.cpp=.o)
 
-.PHONY: all clean install test check-cuda gpu-info debug
+.PHONY: all clean install test check-cuda gpu-info debug cpu-only
 
-all: check-cuda $(TARGET)
+all: $(TARGET)
 
 check-cuda:
 	@echo "Checking CUDA installation..."
-	@which nvcc >/dev/null 2>&1 || (echo "ERROR: nvcc not found. Please install CUDA toolkit." && exit 1)
-	@echo "Detected CUDA architecture: sm_$(CUDA_ARCH)"
-	@nvcc --version
-	@echo "CUDA check passed."
+ifeq ($(CUDA_AVAILABLE),yes)
+	@echo "✓ NVCC found: $(shell nvcc --version | grep release | cut -d',' -f2)"
+	@echo "✓ Detected CUDA architecture: sm_$(CUDA_ARCH)"
+	@echo "✓ CUDA check passed."
+else
+	@echo "⚠ NVCC not found. Building CPU-only version."
+	@echo "  Install CUDA toolkit for GPU acceleration:"
+	@echo "  Run: make install-cuda"
+endif
 
-# Compile CUDA source files
+# Compile CUDA source files (only if CUDA available)
+ifeq ($(USE_CUDA),1)
 %.o: %.cu $(HEADERS)
 	@echo "Compiling CUDA: $<"
 	$(NVCC) $(NVCC_FLAGS) $(INCLUDES) -dc $< -o $@
+endif
 
 # Compile C++ source files  
 %.o: %.cpp $(HEADERS)
@@ -57,9 +81,19 @@ check-cuda:
 
 # Link everything into shared library
 $(TARGET): $(CUDA_OBJECTS) $(CPP_OBJECTS)
-	@echo "Linking optimized CUDA SVM library..."
+	@echo "Linking optimized SVM library..."
+ifeq ($(USE_CUDA),1)
 	$(NVCC) $(NVCC_FLAGS) -shared -o $@ $^ $(LIBS)
-	@echo "Build completed successfully! Created $(TARGET)"
+	@echo "✓ Build completed successfully with CUDA support! Created $(TARGET)"
+else
+	$(CXX) $(CXX_FLAGS) -shared -o $@ $^ $(LIBS)
+	@echo "✓ Build completed successfully with CPU fallback! Created $(TARGET)"
+endif
+
+# CPU-only build target
+cpu-only:
+	@echo "Building CPU-only version..."
+	$(MAKE) USE_CUDA=0
 
 # Test compilation and library loading
 test: $(TARGET)

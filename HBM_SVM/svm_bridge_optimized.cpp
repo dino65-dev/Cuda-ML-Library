@@ -1,6 +1,11 @@
 #include "svm_cuda_optimized.cuh"
 #include <iostream>
 #include <exception>
+#include <cstring>
+
+#if USE_CUDA == 0
+#include <cstdlib>
+#endif
 
 // Global error handling
 static std::string last_error = "";
@@ -106,7 +111,7 @@ extern "C" {
         try {
             if (!svm_ptr) return -1.0f;
             OptimizedCudaSVM* svm = static_cast<OptimizedCudaSVM*>(svm_ptr);
-            return svm->get_last_training_time();
+            return svm->get_training_time();
         } catch (...) {
             return -1.0f;
         }
@@ -124,12 +129,17 @@ extern "C" {
     
     // Utility functions
     int check_cuda_available() {
+#if USE_CUDA == 1
         int device_count = 0;
         cudaError_t error = cudaGetDeviceCount(&device_count);
         return (error == cudaSuccess && device_count > 0) ? 1 : 0;
+#else
+        return 0; // CPU fallback, no CUDA
+#endif
     }
     
     void get_gpu_info(int* device_count, char* device_name, int name_length) {
+#if USE_CUDA == 1
         try {
             cudaGetDeviceCount(device_count);
             if (*device_count > 0) {
@@ -142,5 +152,12 @@ extern "C" {
             *device_count = 0;
             if (name_length > 0) device_name[0] = '\0';
         }
+#else
+        *device_count = 0;
+        if (name_length > 0) {
+            strncpy(device_name, "CPU Fallback", name_length - 1);
+            device_name[name_length - 1] = '\0';
+        }
+#endif
     }
 }

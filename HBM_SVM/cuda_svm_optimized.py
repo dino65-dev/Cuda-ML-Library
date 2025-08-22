@@ -29,9 +29,13 @@ class CudaSVMError(Exception):
 def find_cuda_svm_library():
     """Find the CUDA SVM shared library"""
     possible_paths = [
+        "./libcuda_svm_optimized.so",
         "./libcuda_svm.so",
+        "/usr/local/lib/libcuda_svm_optimized.so",
         "/usr/local/lib/libcuda_svm.so",
+        "/usr/lib/libcuda_svm_optimized.so",
         "/usr/lib/libcuda_svm.so",
+        os.path.join(os.path.dirname(__file__), "libcuda_svm_optimized.so"),
         os.path.join(os.path.dirname(__file__), "libcuda_svm.so")
     ]
     
@@ -66,11 +70,12 @@ class OptimizedCudaSVM:
         # Setup function signatures
         self._setup_function_signatures()
         
-        # Check CUDA availability
+        # Check CUDA availability (allow CPU fallback)
         if not self._lib.check_cuda_available():
-            raise CudaSVMError("CUDA is not available on this system")
-        
-        if verbose:
+            if verbose:
+                print("⚠ CUDA not available - using CPU fallback mode")
+                print("  For best performance, install CUDA toolkit")
+        elif verbose:
             self._print_gpu_info()
         
         # Map string parameters to integers
@@ -181,9 +186,11 @@ class OptimizedCudaSVM:
         device_name = ctypes.create_string_buffer(256)
         self._lib.get_gpu_info(ctypes.byref(device_count), device_name, 256)
         
-        print(f"CUDA Devices Available: {device_count.value}")
         if device_count.value > 0:
+            print(f"CUDA Devices Available: {device_count.value}")
             print(f"Primary GPU: {device_name.value.decode('utf-8')}")
+        else:
+            print("Using CPU fallback mode - no CUDA devices detected")
     
     def fit(self, X, y):
         """

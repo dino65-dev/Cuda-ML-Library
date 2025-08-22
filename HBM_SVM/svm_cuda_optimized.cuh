@@ -1,6 +1,11 @@
 #ifndef SVM_CUDA_OPTIMIZED_CUH
 #define SVM_CUDA_OPTIMIZED_CUH
 
+#ifndef USE_CUDA
+#define USE_CUDA 1  // Default to CUDA unless explicitly disabled
+#endif
+
+#if USE_CUDA == 1
 #include <cuda_runtime.h>
 #include <cublas_v2.h>
 #include <curand.h>
@@ -8,8 +13,28 @@
 #include <cub/cub.cuh>
 #include <thrust/device_vector.h>
 #include <thrust/host_vector.h>
-#include <memory>
+#endif
 
+#include <memory>
+#include <vector>
+
+// SVM Parameters structure (compatible with both CUDA and CPU)
+struct SVMParams {
+    int svm_type = 0;        // 0=C_SVC, 1=NU_SVC, 2=EPSILON_SVR, 3=NU_SVR
+    int kernel_type = 1;     // 0=LINEAR, 1=RBF, 2=POLYNOMIAL, 3=SIGMOID
+    float C = 1.0f;
+    float epsilon = 0.1f;
+    float gamma = 0.1f;
+    float coef0 = 0.0f;
+    int degree = 3;
+    float nu = 0.5f;
+    float tolerance = 1e-3f;
+    int max_iter = 1000;
+    bool shrinking = true;
+    bool probability = false;
+};
+
+#if USE_CUDA == 1
 // Memory pool for efficient GPU memory management
 class CudaMemoryPool {
 private:
@@ -51,10 +76,23 @@ public:
                          const SVMParams& params);
     void invalidate();
 };
+#else
+// CPU fallback declarations
+class CudaMemoryPool {
+public:
+    CudaMemoryPool(size_t initial_size = 0);
+    ~CudaMemoryPool();
+    void* allocate(size_t size);
+    void deallocate(void* ptr);
+    void reset();
+    size_t get_usage() const;
+};
+#endif
 
-// Enhanced SVM class with optimizations
+// Enhanced SVM class with optimizations (works with both CUDA and CPU)
 class OptimizedCudaSVM {
 private:
+#if USE_CUDA == 1
     SVMParams params_;
     cublasHandle_t cublas_handle_;
     curandGenerator_t curand_gen_;
@@ -96,6 +134,10 @@ private:
     
     // Performance monitoring
     cudaEvent_t start_event_, stop_event_;
+#else
+    // CPU fallback implementation (forward declaration)
+    void* cpu_impl_;
+#endif
 
 public:
     OptimizedCudaSVM(const SVMParams& params);
@@ -107,19 +149,22 @@ public:
                            int n_samples, int n_features);
     
     // Performance metrics
-    float get_last_training_time() const;
+    float get_training_time() const;
     size_t get_memory_usage() const;
-    
+
 private:
+#if USE_CUDA == 1
     void initialize_optimized_memory(int n_samples, int n_features);
     void cleanup_optimized_memory();
     void optimized_smo_algorithm();
     void adaptive_working_set_selection();
     void mixed_precision_kernel_computation();
     void compute_kernel_streaming(int row_start, int row_end);
+#endif
 };
 
-// Optimized CUDA kernels
+#if USE_CUDA == 1
+// Optimized CUDA kernels (only available when CUDA is enabled)
 __global__ void optimized_rbf_kernel_streaming(
     const float* X1, const float* X2, float* K,
     int n1, int n2, int n_features, float gamma,
@@ -144,7 +189,7 @@ __global__ void vectorized_working_set_selection(
 __global__ void optimized_prediction_kernel(
     const float* sv_X, const float* sv_alpha, const float* X_test,
     float* predictions, int n_sv, int n_test, int n_features,
-    float bias, KernelType kernel_type, float gamma, float coef0, int degree
+    float bias, int kernel_type, float gamma, float coef0, int degree
 );
 
 // Memory-efficient matrix operations
@@ -153,5 +198,6 @@ __global__ void blocked_matrix_multiply(
     const T* A, const T* B, T* C,
     int M, int N, int K, int block_size
 );
+#endif // USE_CUDA == 1
 
 #endif // SVM_CUDA_OPTIMIZED_CUH

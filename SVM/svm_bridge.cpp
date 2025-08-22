@@ -1,3 +1,5 @@
+#include <cmath>
+
 extern "C" {
     // Struct definition (matching the Python ctypes structure)
     struct SVMParams {

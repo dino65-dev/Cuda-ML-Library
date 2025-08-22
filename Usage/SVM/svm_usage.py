@@ -2,7 +2,10 @@ import numpy as np
 from sklearn.datasets import make_classification, make_regression
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from SVM.cuda_svm import CudaSVC, CudaSVR
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'SVM'))
+from cuda_svm import CudaSVC, CudaSVR
 
 # Classification Example
 print("=== CUDA SVM Classification ===")
