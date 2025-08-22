@@ -10,7 +10,10 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, r2_score
 
 # Import our optimized CUDA SVM
-from HBM_SVM.cuda_svm_optimized import OptimizedCudaSVC, OptimizedCudaSVR
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'HBM_SVM'))
+from cuda_svm_optimized import OptimizedCudaSVC, OptimizedCudaSVR
 
 def classification_example():
     """Classification example with performance comparison"""
