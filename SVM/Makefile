@@ -51,10 +51,10 @@ endif
 $(CPP_OBJ): $(CPP_SOURCES)
 ifeq ($(USE_CUDA),1)
 	@echo "Compiling C++ bridge..."
-	$(CXX) $(CXX_FLAGS) $(INCLUDES) -c $< -o $@
+	$(CXX) -O3 -fPIC -std=c++14 -DUSE_CUDA=1 $(INCLUDES) -c $< -o $@
 else
 	@echo "Compiling C++ bridge (CPU only)..."
-	$(CXX) $(CXX_FLAGS) $(INCLUDES) -c $< -o $@
+	$(CXX) -O3 -fPIC -std=c++14 -DUSE_CUDA=0 $(INCLUDES) -c $< -o $@
 endif
 
 # Link everything into shared library
@@ -64,7 +64,7 @@ ifeq ($(USE_CUDA),1)
 	$(NVCC) $(CUDA_FLAGS) -shared -o $@ $^ $(LIBS)
 	@echo "✓ Build completed successfully with CUDA support!"
 else
-	$(CXX) $(CXX_FLAGS) -shared -o $@ $^ $(LIBS)
+	$(CXX) -O3 -fPIC -std=c++14 -shared -o $@ $^ $(LIBS)
 	@echo "✓ Build completed successfully with CPU fallback!"
 endif
 

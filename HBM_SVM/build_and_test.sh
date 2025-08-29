@@ -71,7 +71,7 @@ fi
 # Test library loading
 echo ""
 echo "Testing library loading..."
-if ! python3 -c "
+python3 -c "
 try:
     from cuda_svm_optimized import OptimizedCudaSVC, OptimizedCudaSVR
     print('✓ Library modules imported successfully')
@@ -86,7 +86,8 @@ try:
 except Exception as e:
     print(f'❌ Library loading failed: {e}')
     exit(1)
-" 2>/dev/null; then
+" 2>/dev/null
+if [ $? -ne 0 ]; then
     print_error "Library loading failed!"
     echo ""
     echo "Possible issues:"
@@ -104,7 +105,7 @@ print_success "Library loading successful"
 # Test with sample data
 echo ""
 echo "Testing with sample data..."
-if ! python3 -c "
+python3 -c "
 import numpy as np
 from sklearn.datasets import make_classification
 from cuda_svm_optimized import OptimizedCudaSVC
@@ -132,7 +133,8 @@ try:
 except Exception as e:
     print(f'❌ Sample test failed: {e}')
     exit(1)
-" 2>/dev/null; then
+" 2>/dev/null
+if [ $? -ne 0 ]; then
     print_error "Sample test failed!"
     exit 1
 fi
