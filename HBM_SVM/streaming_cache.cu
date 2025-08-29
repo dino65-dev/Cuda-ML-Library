@@ -1,5 +1,6 @@
 #include "svm_cuda_optimized.cuh"
 
+#if USE_CUDA == 1
 StreamingKernelCache::StreamingKernelCache(int max_size, CudaMemoryPool* pool)
     : max_cache_size_(max_size), cache_size_(0), memory_pool_(pool) {
     
@@ -40,13 +41,20 @@ float* StreamingKernelCache::get_kernel_row(int i, const float* X, int n_samples
     dim3 grid_size((n_samples + block_size.x - 1) / block_size.x);
     
     switch (params.kernel_type) {
-        case KernelType::RBF:
+        case 1:  // RBF kernel
             optimized_rbf_kernel_streaming<<<grid_size, block_size>>>(
                 &X[i * n_features], X, row_ptr,
                 1, n_samples, n_features, params.gamma, 0
             );
             break;
         // Add other kernel types...
+        default:
+            // Default to RBF
+            optimized_rbf_kernel_streaming<<<grid_size, block_size>>>(
+                &X[i * n_features], X, row_ptr,
+                1, n_samples, n_features, params.gamma, 0
+            );
+            break;
     }
     
     // Update cache metadata

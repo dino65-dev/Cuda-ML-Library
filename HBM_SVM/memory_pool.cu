@@ -1,7 +1,6 @@
 #include "svm_cuda_optimized.cuh"
-#include <iostream>
-#include <algorithm>
 
+#if USE_CUDA == 1
 CudaMemoryPool::CudaMemoryPool(size_t initial_size) 
     : head_(nullptr), total_allocated_(0), pool_size_(initial_size) {
     
@@ -91,4 +90,8 @@ void CudaMemoryPool::reset() {
         current = current->next;
     }
     total_allocated_ = 0;
+}
+
+size_t CudaMemoryPool::get_usage() const {
+    return total_allocated_;
 }
