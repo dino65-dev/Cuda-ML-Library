@@ -1,20 +1,6 @@
 #include "svm_cuda_optimized.cuh"
-#include <iostream>
-#include <algorithm>
 
 #if USE_CUDA == 1
-// CUDA error checking macros
-#define CUDA_CHECK(call) \
-    do { \
-        cudaError_t error = call; \
-        if (error != cudaSuccess) { \
-            std::cerr << "CUDA error at " << __FILE__ << ":" << __LINE__ \
-                      << " - " << cudaGetErrorString(error) << std::endl; \
-            throw std::runtime_error("CUDA error: " + std::string(cudaGetErrorString(error))); \
-        } \
-    } while(0)
-#endif
-
 CudaMemoryPool::CudaMemoryPool(size_t initial_size) 
     : head_(nullptr), total_allocated_(0), pool_size_(initial_size) {
     

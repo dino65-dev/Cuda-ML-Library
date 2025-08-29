@@ -3,37 +3,6 @@
 #include <algorithm>
 #include <stdexcept>
 
-#if USE_CUDA == 1
-// CUDA error checking macros
-#define CUDA_CHECK(call) \
-    do { \
-        cudaError_t error = call; \
-        if (error != cudaSuccess) { \
-            std::cerr << "CUDA error at " << __FILE__ << ":" << __LINE__ \
-                      << " - " << cudaGetErrorString(error) << std::endl; \
-            throw std::runtime_error("CUDA error: " + std::string(cudaGetErrorString(error))); \
-        } \
-    } while(0)
-
-#define CUBLAS_CHECK(call) \
-    do { \
-        cublasStatus_t status = call; \
-        if (status != CUBLAS_STATUS_SUCCESS) { \
-            std::cerr << "CUBLAS error at " << __FILE__ << ":" << __LINE__ << std::endl; \
-            throw std::runtime_error("CUBLAS error"); \
-        } \
-    } while(0)
-
-#define CURAND_CHECK(call) \
-    do { \
-        curandStatus_t status = call; \
-        if (status != CURAND_STATUS_SUCCESS) { \
-            std::cerr << "CURAND error at " << __FILE__ << ":" << __LINE__ << std::endl; \
-            throw std::runtime_error("CURAND error"); \
-        } \
-    } while(0)
-#endif
-
 OptimizedCudaSVM::OptimizedCudaSVM(const SVMParams& params) 
     : params_(params), n_samples_(0), n_features_(0), n_sv_(0), bias_(0.0f) {
     
@@ -48,7 +17,7 @@ OptimizedCudaSVM::OptimizedCudaSVM(const SVMParams& params)
     // Initialize memory pool (1GB initial size, adjust based on GPU memory)
     size_t free_mem, total_mem;
     CUDA_CHECK(cudaMemGetInfo(&free_mem, &total_mem));
-    size_t pool_size = std::min(free_mem * 0.8, (size_t)(2ULL * 1024 * 1024 * 1024)); // 80% of free or 2GB max
+    size_t pool_size = std::min((size_t)(free_mem * 0.8), (size_t)(2ULL * 1024 * 1024 * 1024)); // 80% of free or 2GB max
     
     memory_pool_ = std::make_unique<CudaMemoryPool>(pool_size);
     

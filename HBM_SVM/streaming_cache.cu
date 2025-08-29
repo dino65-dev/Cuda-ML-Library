@@ -1,18 +1,6 @@
 #include "svm_cuda_optimized.cuh"
 
 #if USE_CUDA == 1
-// CUDA error checking macros
-#define CUDA_CHECK(call) \
-    do { \
-        cudaError_t error = call; \
-        if (error != cudaSuccess) { \
-            std::cerr << "CUDA error at " << __FILE__ << ":" << __LINE__ \
-                      << " - " << cudaGetErrorString(error) << std::endl; \
-            throw std::runtime_error("CUDA error: " + std::string(cudaGetErrorString(error))); \
-        } \
-    } while(0)
-#endif
-
 StreamingKernelCache::StreamingKernelCache(int max_size, CudaMemoryPool* pool)
     : max_cache_size_(max_size), cache_size_(0), memory_pool_(pool) {
     
