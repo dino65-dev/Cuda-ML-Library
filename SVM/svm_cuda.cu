@@ -187,16 +187,24 @@ __global__ void predict_kernel(const float* sv_X, const float* sv_alpha,
 
 // CudaSVM Implementation
 CudaSVM::CudaSVM(const SVMParams& params) : params_(params) {
-    CUBLAS_CHECK(cublasCreate(&cublas_handle_));
-    CURAND_CHECK(curandCreateGenerator(&curand_gen_, CURAND_RNG_PSEUDO_DEFAULT));
-    
+    // Try to create CUDA handles, but don't fail if CUDA is not available
+    cublasStatus_t cublas_status = cublasCreate(&cublas_handle_);
+    curandStatus_t curand_status = curandCreateGenerator(&curand_gen_, CURAND_RNG_PSEUDO_DEFAULT);
+
+    if (cublas_status != CUBLAS_STATUS_SUCCESS || curand_status != CURAND_STATUS_SUCCESS) {
+        // CUDA not available, set handles to nullptr
+        cublas_handle_ = nullptr;
+        curand_gen_ = nullptr;
+        std::cerr << "CUDA not available, using CPU fallback" << std::endl;
+    }
+
     d_X_ = nullptr;
     d_y_ = nullptr;
     d_alpha_ = nullptr;
     d_kernel_cache_ = nullptr;
     d_gradient_ = nullptr;
     d_active_set_ = nullptr;
-    
+
     n_samples_ = 0;
     n_features_ = 0;
     n_sv_ = 0;
@@ -205,8 +213,12 @@ CudaSVM::CudaSVM(const SVMParams& params) : params_(params) {
 
 CudaSVM::~CudaSVM() {
     cleanup_memory();
-    cublasDestroy(cublas_handle_);
-    curandDestroyGenerator(curand_gen_);
+    if (cublas_handle_) {
+        cublasDestroy(cublas_handle_);
+    }
+    if (curand_gen_) {
+        curandDestroyGenerator(curand_gen_);
+    }
 }
 
 void CudaSVM::initialize_memory(int n_samples, int n_features) {
@@ -235,6 +247,11 @@ void CudaSVM::cleanup_memory() {
 }
 
 void CudaSVM::fit(const float* X, const float* y, int n_samples, int n_features) {
+    // Check if CUDA is available
+    if (!cublas_handle_ || !curand_gen_) {
+        throw std::runtime_error("CUDA not available");
+    }
+
     initialize_memory(n_samples, n_features);
     
     // Copy data to device
@@ -358,6 +375,11 @@ void CudaSVM::compute_bias() {
 }
 
 void CudaSVM::predict(const float* X, float* predictions, int n_samples, int n_features) {
+    // Check if CUDA is available
+    if (!cublas_handle_ || !curand_gen_) {
+        throw std::runtime_error("CUDA not available");
+    }
+
     float* d_X_test;
     float* d_predictions;
     
@@ -395,6 +417,11 @@ void CudaSVM::predict(const float* X, float* predictions, int n_samples, int n_f
 }
 
 void CudaSVM::predict_proba(const float* X, float* probabilities, int n_samples, int n_features) {
+    // Check if CUDA is available
+    if (!cublas_handle_ || !curand_gen_) {
+        throw std::runtime_error("CUDA not available");
+    }
+
     // Get decision function values
     predict(X, probabilities, n_samples, n_features);
     
