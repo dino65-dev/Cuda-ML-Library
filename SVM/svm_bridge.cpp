@@ -6,18 +6,25 @@
 #include <cstdlib>
 #include "svm_bridge.h"
 
-// Conditionally include CUDA headers only when CUDA is available
-#ifdef USE_CUDA
+// Only include CUDA headers when compiling with nvcc (not g++)
+#if defined(__CUDACC__) || defined(__NVCC__)
 #include "svm_cuda.cuh"
+#define CUDA_AVAILABLE 1
+#else
+#define CUDA_AVAILABLE 0
 #endif
 
-// Forward declaration of CudaSVM class
-class CudaSVM;
+// Use void pointer when CUDA not available, CudaSVM pointer when available
+#if CUDA_AVAILABLE
+typedef CudaSVM* CudaSVMHandle;
+#else
+typedef void* CudaSVMHandle;
+#endif
 
 // Enhanced CUDA SVM wrapper with proper SMO algorithm
 struct CudaSVMWrapper {
         ::SVMParams cuda_params;  // CUDA SVM parameters
-        std::unique_ptr<CudaSVM> cuda_svm;
+        CudaSVMHandle cuda_svm;
         bool is_fitted;
 
         CudaSVMWrapper(const ::SVMParams& p) : is_fitted(false) {
@@ -35,9 +42,9 @@ struct CudaSVMWrapper {
             cuda_params.shrinking = p.shrinking;
             cuda_params.probability = p.probability;
 
-#ifdef USE_CUDA
+#if CUDA_AVAILABLE
             try {
-                cuda_svm = std::make_unique<CudaSVM>(cuda_params);
+                cuda_svm = new CudaSVM(cuda_params);
             } catch (const std::exception& e) {
                 std::cerr << "CUDA SVM initialization failed, falling back to CPU: " << e.what() << std::endl;
                 cuda_svm = nullptr; // Will use CPU fallback in methods
@@ -47,10 +54,20 @@ struct CudaSVMWrapper {
 #endif
         }
 
+        ~CudaSVMWrapper() {
+#if CUDA_AVAILABLE
+            if (cuda_svm) {
+                delete static_cast<CudaSVM*>(cuda_svm);
+            }
+#endif
+        }
+
         void fit(const float* X, const float* y, int n_samples, int n_features) {
             if (cuda_svm) {
                 try {
-                    cuda_svm->fit(X, y, n_samples, n_features);
+#if CUDA_AVAILABLE
+                    static_cast<CudaSVM*>(cuda_svm)->fit(X, y, n_samples, n_features);
+#endif
                     is_fitted = true;
                 } catch (const std::exception& e) {
                     std::cerr << "CUDA SVM fit error, falling back to CPU: " << e.what() << std::endl;
@@ -66,7 +83,9 @@ struct CudaSVMWrapper {
 
             if (cuda_svm) {
                 try {
-                    cuda_svm->predict(X, predictions, n_samples, n_features);
+#if CUDA_AVAILABLE
+                    static_cast<CudaSVM*>(cuda_svm)->predict(X, predictions, n_samples, n_features);
+#endif
                 } catch (const std::exception& e) {
                     std::cerr << "CUDA SVM predict error, falling back to CPU: " << e.what() << std::endl;
                     cpu_fallback_predict(X, predictions, n_samples, n_features);
@@ -81,7 +100,9 @@ struct CudaSVMWrapper {
 
             if (cuda_svm) {
                 try {
-                    cuda_svm->predict_proba(X, probabilities, n_samples, n_features);
+#if CUDA_AVAILABLE
+                    static_cast<CudaSVM*>(cuda_svm)->predict_proba(X, probabilities, n_samples, n_features);
+#endif
                 } catch (const std::exception& e) {
                     std::cerr << "CUDA SVM predict_proba error, falling back to CPU: " << e.what() << std::endl;
                     cpu_fallback_predict_proba(X, probabilities, n_samples, n_features);
