@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#if USE_CUDA == 1
+
 OptimizedCudaSVM::OptimizedCudaSVM(const SVMParams& params) 
     : params_(params), n_samples_(0), n_features_(0), n_sv_(0), bias_(0.0f) {
     
