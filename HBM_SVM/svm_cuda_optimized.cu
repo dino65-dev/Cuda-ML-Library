@@ -10,7 +10,7 @@ OptimizedCudaSVM::OptimizedCudaSVM(const SVMParams& params)
     
     // Initialize CUDA resources
     CUBLAS_CHECK(cublasCreate(&cublas_handle_));
-    CUDA_CHECK(curandCreateGenerator(&curand_gen_, CURAND_RNG_PSEUDO_DEFAULT));
+    CURAND_CHECK(curandCreateGenerator(&curand_gen_, CURAND_RNG_PSEUDO_DEFAULT));
     
     // Create CUDA streams for overlapped execution
     CUDA_CHECK(cudaStreamCreate(&compute_stream_));
