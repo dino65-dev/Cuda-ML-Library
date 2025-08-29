@@ -95,3 +95,5 @@ void CudaMemoryPool::reset() {
 size_t CudaMemoryPool::get_usage() const {
     return total_allocated_;
 }
+
+#endif
