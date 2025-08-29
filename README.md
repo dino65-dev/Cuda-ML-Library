@@ -11,8 +11,8 @@ This repository contains CUDA-accelerated machine learning implementations with 
 
 ### SVM (Support Vector Machine)
 - **Location**: `SVM/` and `HBM_SVM/`
-- **Status**: ⚠️ In development
-- **Note**: HBM SVM may not be fully functional yet
+- **Status**: ✅ **Fully functional with CUDA acceleration and CPU fallback**
+- **Features**: High-performance CUDA SVM with HBM support and automatic CPU fallback
 
 ## Quick Start
 

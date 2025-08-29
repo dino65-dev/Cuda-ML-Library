@@ -175,6 +175,9 @@ class OptimizedCudaSVM:
     
     def _set_gamma(self, X):
         """Set gamma parameter based on input data"""
+        if not self._use_cuda:
+            return
+            
         if self.gamma == 'scale':
             self.params.gamma = 1.0 / (X.shape[1] * X.var())
         elif self.gamma == 'auto':
@@ -482,23 +485,29 @@ class OptimizedCudaSVM:
     
     def get_performance_metrics(self):
         """Get detailed performance metrics"""
+        if self._use_cuda:
+            gamma_val = self.params.gamma
+        else:
+            gamma_val = self.gamma
+            
         return {
             'training_time': self.training_time_,
-            'memory_usage_gb': self.memory_usage_ / (1024**3),
+            'memory_usage_gb': self.memory_usage_ / (1024**3) if self._use_cuda else 0,
             'is_fitted': self.is_fitted,
             'n_features': self.n_features_,
             'parameters': {
                 'svm_type': self.svm_type,
                 'kernel': self.kernel,
                 'C': self.C,
-                'gamma': self.params.gamma,
+                'gamma': gamma_val,
                 'epsilon': self.epsilon
-            }
+            },
+            'backend': 'CUDA' if self._use_cuda else 'CPU'
         }
     
     def __del__(self):
-        """Cleanup CUDA resources"""
-        if hasattr(self, 'svm_ptr') and self.svm_ptr:
+        """Cleanup resources"""
+        if hasattr(self, '_use_cuda') and self._use_cuda and hasattr(self, 'svm_ptr') and self.svm_ptr:
             try:
                 self._lib.destroy_optimized_svm(self.svm_ptr)
             except:

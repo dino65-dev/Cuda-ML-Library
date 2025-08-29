@@ -74,6 +74,21 @@ class StreamingKernelCache {
 - **Memory**: 16GB+ VRAM for optimal performance
 - **Compute Capability**: 7.0+ (Volta architecture or newer)
 
+### CPU Fallback Support
+
+**Automatic CPU Fallback**: If CUDA is not available or no compatible GPU is found, the implementation automatically falls back to highly optimized CPU implementations using scikit-learn:
+
+- **Classification**: Uses `sklearn.svm.SVC` with optimized parameters
+- **Regression**: Uses `sklearn.svm.SVR` with optimized parameters
+- **Performance**: Maintains scikit-learn's performance characteristics
+- **Compatibility**: Same API and parameter mapping
+
+**When CPU Fallback is Used:**
+- No CUDA toolkit installed
+- No compatible GPU available
+- CUDA library compilation fails
+- GPU memory insufficient for dataset
+
 ### Build the Optimized Library
 
 ```bash

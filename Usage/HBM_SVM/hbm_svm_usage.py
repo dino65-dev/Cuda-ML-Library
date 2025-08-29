@@ -155,5 +155,6 @@ if __name__ == "__main__":
         
     except Exception as e:
         print(f"❌ Error running examples: {e}")
-        print("\nMake sure to compile the CUDA library first:")
-        print("  make clean && make")
+        print("\nThe library will automatically fallback to CPU if CUDA is not available.")
+        print("For best performance, compile the CUDA library:")
+        print("  cd HBM_SVM && make clean && make")
