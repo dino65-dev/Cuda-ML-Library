@@ -2,8 +2,10 @@ import ctypes
 import numpy as np
 import os
 import sys
+import time
 from ctypes import c_float, c_int, c_bool, c_char_p, c_size_t, POINTER, Structure
 import warnings
+from sklearn.svm import SVC, SVR, NuSVC, NuSVR
 
 class SVMParams(Structure):
     """SVM Parameters structure matching C++ definition"""
@@ -60,22 +62,25 @@ class OptimizedCudaSVM:
                  gamma='scale', coef0=0.0, degree=3, nu=0.5, tolerance=1e-3,
                  max_iter=1000, shrinking=True, probability=False, verbose=False):
         
-        # Load the CUDA SVM library
+        # Try to load CUDA library first
+        self._use_cuda = True
         try:
             lib_path = find_cuda_svm_library()
             self._lib = ctypes.CDLL(lib_path)
-        except Exception as e:
-            raise CudaSVMError(f"Failed to load CUDA SVM library: {e}")
-        
-        # Setup function signatures
-        self._setup_function_signatures()
+            self._setup_function_signatures()
+        except (FileNotFoundError, OSError) as e:
+            warnings.warn(f"CUDA library not found ({e}), falling back to CPU implementation")
+            self._use_cuda = False
+            self._sklearn_svm = None
         
         # Check CUDA availability (allow CPU fallback)
-        if not self._lib.check_cuda_available():
+        if self._use_cuda and not self._lib.check_cuda_available():
             if verbose:
                 print("⚠ CUDA not available - using CPU fallback mode")
                 print("  For best performance, install CUDA toolkit")
-        elif verbose:
+            self._use_cuda = False
+            self._sklearn_svm = None
+        elif self._use_cuda and verbose:
             self._print_gpu_info()
         
         # Map string parameters to integers
@@ -97,12 +102,12 @@ class OptimizedCudaSVM:
         self.probability = probability
         self.verbose = verbose
         
-        # Initialize parameters structure
-        self.params = SVMParams()
-        self._update_params()
+        # Initialize parameters structure only if using CUDA
+        if self._use_cuda:
+            self.params = SVMParams()
+            self._update_params()
+            self.svm_ptr = None
         
-        # SVM object pointer
-        self.svm_ptr = None
         self.is_fitted = False
         self.n_features_ = None
         self.training_time_ = 0.0
@@ -110,7 +115,9 @@ class OptimizedCudaSVM:
         
     def _setup_function_signatures(self):
         """Setup ctypes function signatures for type safety"""
-        
+        if not self._use_cuda:
+            return
+            
         # Error handling
         self._lib.get_last_error.argtypes = []
         self._lib.get_last_error.restype = c_char_p
@@ -151,6 +158,9 @@ class OptimizedCudaSVM:
     
     def _update_params(self):
         """Update the parameters structure"""
+        if not self._use_cuda:
+            return
+            
         self.params.svm_type = self.svm_type_map[self.svm_type]
         self.params.kernel_type = self.kernel_map[self.kernel]
         self.params.C = self.C
@@ -174,6 +184,9 @@ class OptimizedCudaSVM:
     
     def _check_error(self):
         """Check for errors from the C++ library"""
+        if not self._use_cuda:
+            return
+            
         error_msg = self._lib.get_last_error()
         if error_msg:
             error_str = error_msg.decode('utf-8')
@@ -182,6 +195,10 @@ class OptimizedCudaSVM:
     
     def _print_gpu_info(self):
         """Print GPU information"""
+        if not self._use_cuda:
+            print("Using CPU fallback mode - no CUDA devices detected")
+            return
+            
         device_count = c_int()
         device_name = ctypes.create_string_buffer(256)
         self._lib.get_gpu_info(ctypes.byref(device_count), device_name, 256)
@@ -226,43 +243,145 @@ class OptimizedCudaSVM:
         self._set_gamma(X)
         self._update_params()
         
-        # Create SVM object
-        self.svm_ptr = self._lib.create_optimized_svm(ctypes.byref(self.params))
-        if not self.svm_ptr:
-            self._check_error()
-            raise CudaSVMError("Failed to create SVM object")
+        start_time = time.time()
         
-        try:
-            # Prepare data pointers
-            X_ptr = X.ctypes.data_as(POINTER(c_float))
-            y_ptr = y.ctypes.data_as(POINTER(c_float))
-            
-            # Fit the model
-            result = self._lib.fit_optimized_svm(
-                self.svm_ptr, X_ptr, y_ptr, 
-                c_int(X.shape[0]), c_int(X.shape[1])
-            )
-            
-            if result != 0:
+        if self._use_cuda:
+            # Create SVM object
+            self.svm_ptr = self._lib.create_optimized_svm(ctypes.byref(self.params))
+            if not self.svm_ptr:
                 self._check_error()
-                raise CudaSVMError("Training failed")
+                raise CudaSVMError("Failed to create SVM object")
             
-            # Get performance metrics
-            self.training_time_ = self._lib.get_training_time(self.svm_ptr)
-            self.memory_usage_ = self._lib.get_memory_usage(self.svm_ptr)
+            try:
+                # Prepare data pointers
+                X_ptr = X.ctypes.data_as(POINTER(c_float))
+                y_ptr = y.ctypes.data_as(POINTER(c_float))
+                
+                # Fit the model
+                result = self._lib.fit_optimized_svm(
+                    self.svm_ptr, X_ptr, y_ptr, 
+                    c_int(X.shape[0]), c_int(X.shape[1])
+                )
+                
+                if result != 0:
+                    self._check_error()
+                    raise CudaSVMError("Training failed")
+                
+                # Get performance metrics
+                self.training_time_ = self._lib.get_training_time(self.svm_ptr)
+                self.memory_usage_ = self._lib.get_memory_usage(self.svm_ptr)
+                
+                self.is_fitted = True
+                
+                if self.verbose:
+                    print(f"Training completed in {self.training_time_:.2f}s")
+                    print(f"GPU memory used: {self.memory_usage_ / (1024**3):.2f}GB")
+                
+            except Exception as e:
+                # Clean up on error
+                if self.svm_ptr:
+                    self._lib.destroy_optimized_svm(self.svm_ptr)
+                    self.svm_ptr = None
+                raise e
+        else:
+            # CPU fallback using sklearn
+            if self.verbose:
+                print("Starting CPU SVM training...")
             
+            # Convert parameters to sklearn format
+            if self.svm_type in ['c_svc', 'nu_svc']:
+                # Classification
+                if self.kernel == 'poly':
+                    sklearn_kernel = 'poly'
+                elif self.kernel == 'sigmoid':
+                    sklearn_kernel = 'sigmoid'
+                elif self.kernel == 'linear':
+                    sklearn_kernel = 'linear'
+                else:  # rbf
+                    sklearn_kernel = 'rbf'
+                
+                if self.svm_type == 'c_svc':
+                    self._sklearn_svm = SVC(
+                        C=self.C,
+                        kernel=sklearn_kernel,
+                        gamma=self.params.gamma if hasattr(self, 'params') else 'scale',
+                        coef0=self.coef0,
+                        degree=self.degree,
+                        shrinking=self.shrinking,
+                        probability=self.probability,
+                        tol=self.tolerance,
+                        max_iter=self.max_iter,
+                        random_state=42
+                    )
+                else:  # nu_svc
+                    self._sklearn_svm = NuSVC(
+                        nu=self.nu,
+                        kernel=sklearn_kernel,
+                        gamma=self.params.gamma if hasattr(self, 'params') else 'scale',
+                        coef0=self.coef0,
+                        degree=self.degree,
+                        shrinking=self.shrinking,
+                        probability=self.probability,
+                        tol=self.tolerance,
+                        max_iter=self.max_iter,
+                        random_state=42
+                    )
+            else:
+                # Regression
+                if self.kernel == 'poly':
+                    sklearn_kernel = 'poly'
+                elif self.kernel == 'sigmoid':
+                    sklearn_kernel = 'sigmoid'
+                elif self.kernel == 'linear':
+                    sklearn_kernel = 'linear'
+                else:  # rbf
+                    sklearn_kernel = 'rbf'
+                
+                if self.svm_type == 'epsilon_svr':
+                    self._sklearn_svm = SVR(
+                        C=self.C,
+                        epsilon=self.epsilon,
+                        kernel=sklearn_kernel,
+                        gamma=self.params.gamma if hasattr(self, 'params') else 'scale',
+                        coef0=self.coef0,
+                        degree=self.degree,
+                        shrinking=self.shrinking,
+                        tol=self.tolerance,
+                        max_iter=self.max_iter
+                    )
+                else:  # nu_svr
+                    self._sklearn_svm = NuSVR(
+                        nu=self.nu,
+                        C=self.C,
+                        kernel=sklearn_kernel,
+                        gamma=self.params.gamma if hasattr(self, 'params') else 'scale',
+                        coef0=self.coef0,
+                        degree=self.degree,
+                        shrinking=self.shrinking,
+                        tol=self.tolerance,
+                        max_iter=self.max_iter
+                    )
+            
+            # Convert labels for classification
+            if self.svm_type in ['c_svc', 'nu_svc']:
+                y_fit = y.copy()
+                if y.dtype != np.int32:
+                    # Convert to sklearn format (-1, 1)
+                    unique_labels = np.unique(y)
+                    if len(unique_labels) == 2:
+                        y_fit = np.where(y == unique_labels[0], -1, 1)
+                    else:
+                        y_fit = y.astype(np.int32)
+            else:
+                y_fit = y
+            
+            self._sklearn_svm.fit(X, y_fit)
+            self.training_time_ = time.time() - start_time
+            self.memory_usage_ = 0  # Not tracked for CPU
             self.is_fitted = True
             
             if self.verbose:
                 print(f"Training completed in {self.training_time_:.2f}s")
-                print(f"GPU memory used: {self.memory_usage_ / (1024**3):.2f}GB")
-            
-        except Exception as e:
-            # Clean up on error
-            if self.svm_ptr:
-                self._lib.destroy_optimized_svm(self.svm_ptr)
-                self.svm_ptr = None
-            raise e
         
         return self
     
@@ -293,30 +412,43 @@ class OptimizedCudaSVM:
         if not X.flags['C_CONTIGUOUS']:
             X = np.ascontiguousarray(X)
         
-        predictions = np.zeros(X.shape[0], dtype=np.float32, order='C')
-        
-        X_ptr = X.ctypes.data_as(POINTER(c_float))
-        pred_ptr = predictions.ctypes.data_as(POINTER(c_float))
-        
-        # Choose prediction function based on batch_async flag
-        if batch_async:
-            result = self._lib.predict_batch_async_svm(
-                self.svm_ptr, X_ptr, pred_ptr,
-                c_int(X.shape[0]), c_int(X.shape[1])
-            )
+        if self._use_cuda:
+            predictions = np.zeros(X.shape[0], dtype=np.float32, order='C')
+            
+            X_ptr = X.ctypes.data_as(POINTER(c_float))
+            pred_ptr = predictions.ctypes.data_as(POINTER(c_float))
+            
+            # Choose prediction function based on batch_async flag
+            if batch_async:
+                result = self._lib.predict_batch_async_svm(
+                    self.svm_ptr, X_ptr, pred_ptr,
+                    c_int(X.shape[0]), c_int(X.shape[1])
+                )
+            else:
+                result = self._lib.predict_optimized_svm(
+                    self.svm_ptr, X_ptr, pred_ptr,
+                    c_int(X.shape[0]), c_int(X.shape[1])
+                )
+            
+            if result != 0:
+                self._check_error()
+                raise CudaSVMError("Prediction failed")
+            
+            # For classification, ensure outputs are -1 or 1
+            if self.svm_type in ['c_svc', 'nu_svc']:
+                predictions = np.where(predictions > 0, 1.0, -1.0)
         else:
-            result = self._lib.predict_optimized_svm(
-                self.svm_ptr, X_ptr, pred_ptr,
-                c_int(X.shape[0]), c_int(X.shape[1])
-            )
-        
-        if result != 0:
-            self._check_error()
-            raise CudaSVMError("Prediction failed")
-        
-        # For classification, ensure outputs are -1 or 1
-        if self.svm_type in ['c_svc', 'nu_svc']:
-            predictions = np.where(predictions > 0, 1.0, -1.0)
+            # CPU prediction using sklearn
+            if self._sklearn_svm is None:
+                raise CudaSVMError("CPU SVM not initialized")
+            
+            predictions = self._sklearn_svm.predict(X)
+            
+            # Convert sklearn predictions back to our format
+            if self.svm_type in ['c_svc', 'nu_svc']:
+                # sklearn SVC/NuSVC returns class labels, we want -1/1
+                if hasattr(self._sklearn_svm, 'classes_') and len(self._sklearn_svm.classes_) == 2:  # type: ignore
+                    predictions = np.where(predictions == self._sklearn_svm.classes_[0], -1.0, 1.0)  # type: ignore
         
         return predictions
     
