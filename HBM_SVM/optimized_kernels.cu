@@ -1,4 +1,5 @@
 #include "svm_cuda_optimized.cuh"
+#include <algorithm>
 
 // Optimized RBF kernel with streaming computation
 __global__ void optimized_rbf_kernel_streaming(
@@ -17,7 +18,7 @@ __global__ void optimized_rbf_kernel_streaming(
     
     // Load data into shared memory with coalesced access
     for (int feature_block = 0; feature_block < n_features; feature_block += 16) {
-        int features_to_load = min(16, n_features - feature_block);
+        int features_to_load = std::min(16, n_features - feature_block);
         
         // Load X1 features to shared memory
         if (tid < features_to_load) {
@@ -149,7 +150,7 @@ __global__ void optimized_prediction_kernel(
     
     // Process support vectors in blocks for better cache utilization
     for (int sv_block = 0; sv_block < n_sv; sv_block += 32) {
-        int sv_end = min(sv_block + 32, n_sv);
+        int sv_end = std::min(sv_block + 32, n_sv);
         
         for (int sv_idx = sv_block; sv_idx < sv_end; sv_idx++) {
             float kernel_val = 0.0f;
