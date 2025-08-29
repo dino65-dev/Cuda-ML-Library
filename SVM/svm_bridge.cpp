@@ -4,14 +4,18 @@
 #include <cmath>
 #include <algorithm>
 #include <cstdlib>
+#include "svm_bridge.h"
+
+// Conditionally include CUDA headers only when CUDA is available
+#ifdef USE_CUDA
 #include "svm_cuda.cuh"
+#endif
 
-extern "C" {
-    // Use the SVMParams from the CUDA header
-    using SVMParams = ::SVMParams;
+// Forward declaration of CudaSVM class
+class CudaSVM;
 
-    // Enhanced CUDA SVM wrapper with proper SMO algorithm
-    struct CudaSVMWrapper {
+// Enhanced CUDA SVM wrapper with proper SMO algorithm
+struct CudaSVMWrapper {
         ::SVMParams cuda_params;  // CUDA SVM parameters
         std::unique_ptr<CudaSVM> cuda_svm;
         bool is_fitted;
@@ -31,12 +35,16 @@ extern "C" {
             cuda_params.shrinking = p.shrinking;
             cuda_params.probability = p.probability;
 
+#ifdef USE_CUDA
             try {
                 cuda_svm = std::make_unique<CudaSVM>(cuda_params);
             } catch (const std::exception& e) {
                 std::cerr << "CUDA SVM initialization failed, falling back to CPU: " << e.what() << std::endl;
                 cuda_svm = nullptr; // Will use CPU fallback in methods
             }
+#else
+            cuda_svm = nullptr; // CUDA not available, use CPU fallback
+#endif
         }
 
         void fit(const float* X, const float* y, int n_samples, int n_features) {
@@ -397,6 +405,7 @@ extern "C" {
         }
     };
 
+extern "C" {
     // Exported C functions
     void* create_svm(SVMParams* params) {
         try {

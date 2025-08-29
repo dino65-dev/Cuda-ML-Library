@@ -53,7 +53,7 @@ class CudaSVM:
     svm_type : str, default='c_svc'
         Type of SVM ('c_svc', 'nu_svc', 'epsilon_svr', 'nu_svr')
     kernel : str, default='rbf'
-        Kernel type ('linear', 'rbf', 'poly', 'sigmoid')
+        Kernel type ('linear', 'rbf', 'poly', 'polynomial', 'sigmoid')
     C : float, default=1.0
         Regularization parameter
     epsilon : float, default=0.1
@@ -82,7 +82,7 @@ class CudaSVM:
         
         # Map string parameters to integers
         svm_type_map = {'c_svc': 0, 'nu_svc': 1, 'epsilon_svr': 2, 'nu_svr': 3}
-        kernel_map = {'linear': 0, 'rbf': 1, 'poly': 2, 'sigmoid': 3}
+        kernel_map = {'linear': 0, 'rbf': 1, 'poly': 2, 'polynomial': 2, 'sigmoid': 3}
         
         self.svm_type = svm_type
         self.kernel = kernel
