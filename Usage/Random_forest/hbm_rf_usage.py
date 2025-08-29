@@ -9,8 +9,8 @@ from sklearn.ensemble import RandomForestClassifier as SklearnRF
 # Import our optimized CUDA Random Forest
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'Random_forest'))
-from cuda_rf_optimized import OptimizedCudaRFClassifier, CudaRFError
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'HBM_RandomForest'))
+from Random_forest.cuda_rf_optimized import OptimizedCudaRFClassifier, CudaRFError
 
 def classification_example():
     """Classification example with performance comparison"""
@@ -70,6 +70,6 @@ if __name__ == "__main__":
         print("\n✓ Example completed successfully!")
     except (CudaRFError, FileNotFoundError) as e:
         print(f"\n❌ Error: {e}")
-        print("The library will fallback to CPU implementation if CUDA is not available.")
+        print("Please ensure the 'HBM_RandomForest' library is compiled with 'make'.")
     except Exception as e:
         print(f"\n❌ An unexpected error occurred: {e}")
