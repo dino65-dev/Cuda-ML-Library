@@ -4,7 +4,7 @@ A high-performance CUDA-accelerated Machine Learning library with automatic CPU 
 
 ## 🚀 Features
 
-- **GPU Acceleration**: Full CUDA support for NVIDIA GPUs with Compute Capability 7.0+
+- **GPU Acceleration**: Full CUDA support for NVIDIA GPUs with Compute Capability 6.0+
 - **Automatic CPU Fallback**: Seamless fallback to optimized CPU implementation when CUDA is unavailable
 - **Cross-Platform Compatibility**: Linux, Windows, and macOS support
 - **Multiple SVM Types**: Classification (C-SVC, Nu-SVC) and Regression (Epsilon-SVR, Nu-SVR)
@@ -16,7 +16,7 @@ A high-performance CUDA-accelerated Machine Learning library with automatic CPU 
 ## 📋 System Requirements
 
 ### Hardware Requirements
-- **GPU (Optional)**: NVIDIA GPU with CUDA Compute Capability 7.0+ (RTX 20 series, GTX 1650+, Tesla V100+)
+- **GPU (Optional)**: NVIDIA GPU with CUDA Compute Capability 6.0+ (RTX 20 series, GTX 1050Ti+, Tesla V100+)
 - **CPU (Required)**: Any modern x86_64 processor
 - **RAM**: 4GB+ system memory (8GB+ recommended for large datasets)
 
