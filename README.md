@@ -33,7 +33,7 @@ A high-performance CUDA-accelerated Machine Learning library with automatic CPU 
 
 ## 🛠️ Installation
 
-### Option 1: Install from PyPI (Recommended)
+### Option 1: Install from PyPI (Not yet configured)
 
 ```bash
 pip install cuda-ml-library
