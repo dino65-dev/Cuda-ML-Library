@@ -181,7 +181,7 @@ svc_sigmoid = CudaSVC(kernel='sigmoid', gamma='scale', coef0=0.0)
 ### Current Status
 
 - **SVM**: Fully functional and ready for production use
-- **HBM_SVM**: Currently in development and may not be fully functional yet
+- **RF**: Fully functional and ready for production use
 
 **Please use the standard SVM implementation for all production workloads.**
 
