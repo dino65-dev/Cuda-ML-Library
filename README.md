@@ -39,7 +39,7 @@ A high-performance CUDA-accelerated Machine Learning library with automatic CPU 
 pip install cuda-ml-library
 ```
 
-### Option 2: Build from Source
+### Option 2: Build from Source (Recommended)
 
 ```bash
 # Clone the repository
